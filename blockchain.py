@@ -1,127 +1,137 @@
 import hashlib
 import time
 import random
-from collections import deque
+import requests
+from hashlib import sha256
 
-# Blockchain class
-class Blockchain:
-    def __init__(self):
-        self.chain = []
-        self.pending_transactions = deque()
-        self.create_genesis_block()
+# Coin parameters
+COIN_NAME = "CryptoX"
+COIN_SYMBOL = "CX"
+TOTAL_SUPPLY = 50000000  # Total coins
+PRE_MINED = 25000000     # Pre-mined coins in your wallet
 
-        # Pre-mine 25M coins to the owner's address (you can change this address)
-        self.owner_wallet = "YourWalletAddressHere"
-        self.total_supply = 50000000  # Total supply of coins
-        self.mined_supply = 0
-        self.owner_balance = 25000000  # Pre-mine the 25M to your wallet
+# Wallet (Your pre-mined coins stored here)
+pre_mined_wallet = {
+    "address": "CXPreMinerAddress123456789",  # Placeholder address
+    "balance": PRE_MINED,
+}
 
-    def create_genesis_block(self):
-        """Generate the first block in the chain"""
-        genesis_block = Block(index=0, previous_hash="0", timestamp=time.time(), transactions=[], nonce=0)
-        genesis_block.hash = genesis_block.calculate_hash()
-        self.chain.append(genesis_block)
-
-    def add_block(self, block):
-        """Add a new block to the blockchain"""
-        self.chain.append(block)
-
-    def mine_block(self, miner_wallet):
-        """Proof of Work and Proof of Stake mining combined"""
-
-        # Proof of Work mining (SHA-256 with difficulty)
-        difficulty = self.get_difficulty()
-        nonce = 0
-        last_block = self.chain[-1]
-        while True:
-            block_data = f"{last_block.hash}{str(nonce)}"
-            block_hash = hashlib.sha256(block_data.encode()).hexdigest()
-
-            if block_hash[:difficulty] == '0' * difficulty:
-                break
-            nonce += 1
-
-        # Create a new block with the proof
-        block = Block(index=len(self.chain), previous_hash=last_block.hash, timestamp=time.time(),
-                      transactions=self.pending_transactions, nonce=nonce)
-        block.hash = block.calculate_hash()
-        
-        # Add block to chain
-        self.add_block(block)
-
-        # Reward miner based on PoW (Proof of Work) and PoS (Proof of Stake)
-        self.reward_miner(miner_wallet, block)
-
-        # Clear the pending transactions
-        self.pending_transactions.clear()
-        print(f"Block mined by {miner_wallet} with hash: {block.hash}")
-
-    def reward_miner(self, miner_wallet, block):
-        """Reward the miner with a fixed amount of coins"""
-        reward = 8.5  # Coins per block mined
-        transaction = {
-            "sender": "network",
-            "receiver": miner_wallet,
-            "amount": reward
-        }
-        self.pending_transactions.append(transaction)
-        self.mined_supply += reward
-
-    def get_difficulty(self):
-        """Adjust difficulty based on the block generation speed (like Bitcoin)"""
-        target_block_time = 10  # Target block time in minutes
-        time_per_block = (time.time() - self.chain[-1].timestamp) / 60  # Time per block in minutes
-        if time_per_block < target_block_time:
-            difficulty = min(5, len(self.chain) // 10)  # Increase difficulty as mining speed increases
-        else:
-            difficulty = max(1, len(self.chain) // 20)  # Decrease difficulty if mining slows down
-        return difficulty
-
-    def create_transaction(self, sender_wallet, receiver_wallet, amount):
-        """Create a new transaction"""
-        if self.mined_supply + amount > self.total_supply:
-            print("Not enough coins available!")
-            return
-
-        transaction = {
-            "sender": sender_wallet,
-            "receiver": receiver_wallet,
-            "amount": amount
-        }
-        self.pending_transactions.append(transaction)
-        print(f"Transaction created: {sender_wallet} -> {receiver_wallet} for {amount} coins")
-
-    def print_chain(self):
-        """Print the entire blockchain"""
-        for block in self.chain:
-            print(f"Block {block.index} - Hash: {block.hash} - Transactions: {block.transactions}")
-
-# Block class
+# Blockchain structure
 class Block:
-    def __init__(self, index, previous_hash, timestamp, transactions, nonce):
+    def __init__(self, index, previous_hash, timestamp, data, hash):
         self.index = index
         self.previous_hash = previous_hash
         self.timestamp = timestamp
-        self.transactions = transactions
-        self.nonce = nonce
-        self.hash = ''
+        self.data = data
+        self.hash = hash
 
-    def calculate_hash(self):
-        """Calculate the hash of the block"""
-        block_data = f"{self.index}{self.previous_hash}{self.timestamp}{self.transactions}{self.nonce}"
-        return hashlib.sha256(block_data.encode()).hexdigest()
+# Blockchain
+class Blockchain:
+    def __init__(self):
+        self.chain = []
+        self.create_genesis_block()
 
+    def create_genesis_block(self):
+        # Create the first block (genesis block)
+        genesis_block = Block(0, "0", time.time(), "Genesis Block", self.calculate_hash(0, "0", time.time(), "Genesis Block"))
+        self.chain.append(genesis_block)
 
-# Main function to simulate the blockchain operations
+    def calculate_hash(self, index, previous_hash, timestamp, data):
+        value = f"{index}{previous_hash}{timestamp}{data}"
+        return sha256(value.encode('utf-8')).hexdigest()
+
+    def add_block(self, data):
+        index = len(self.chain)
+        previous_block = self.chain[-1]
+        previous_hash = previous_block.hash
+        timestamp = time.time()
+        block_hash = self.calculate_hash(index, previous_hash, timestamp, data)
+        new_block = Block(index, previous_hash, timestamp, data, block_hash)
+        self.chain.append(new_block)
+
+# Proof of Work Algorithm (Mining)
+class ProofOfWork:
+    def __init__(self, blockchain):
+        self.blockchain = blockchain
+
+    def mine_block(self, data):
+        block = self.blockchain.chain[-1]
+        index = len(self.blockchain.chain)
+        previous_hash = block.hash
+        timestamp = time.time()
+
+        # Simple proof of work (difficulty)
+        target = 0x00000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+        while True:
+            nonce = random.randint(0, 2**64)
+            hash_value = sha256(f"{index}{previous_hash}{timestamp}{data}{nonce}".encode('utf-8')).hexdigest()
+            if int(hash_value, 16) < target:
+                print(f"Block mined: {data}")
+                self.blockchain.add_block(data)
+                break
+
+# Dynamic difficulty adjustment (based on mining rate)
+class DifficultyAdjuster:
+    def __init__(self):
+        self.target_block_time = 600  # 10 minutes in seconds
+        self.blocks_per_difficulty_change = 2016
+        self.difficulty = 1
+
+    def adjust_difficulty(self, blockchain):
+        if len(blockchain.chain) % self.blocks_per_difficulty_change == 0:
+            block_times = [blockchain.chain[i + 1].timestamp - blockchain.chain[i].timestamp for i in range(len(blockchain.chain) - 1)]
+            avg_time_per_block = sum(block_times) / len(block_times)
+            if avg_time_per_block < self.target_block_time:
+                self.difficulty += 1
+            else:
+                self.difficulty -= 1
+            print(f"Difficulty adjusted to {self.difficulty}")
+
+# Transaction fees and pool management
+class Transaction:
+    def __init__(self, sender, recipient, amount, fee=0.08):
+        self.sender = sender
+        self.recipient = recipient
+        self.amount = amount
+        self.fee = fee
+
+    def calculate_fee(self):
+        return self.amount * self.fee
+
+# API to fetch CoinMarketCap data
+class CoinMarketCapAPI:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
+    
+    def get_coin_data(self):
+        headers = {
+            'X-CMC_PRO_API_KEY': self.api_key,
+            'Accept': 'application/json',
+        }
+        response = requests.get(self.url, headers=headers)
+        return response.json()
+
+# Main Application Logic
 if __name__ == "__main__":
+    # Initialize blockchain and miner
     blockchain = Blockchain()
+    miner = ProofOfWork(blockchain)
+    difficulty_adjuster = DifficultyAdjuster()
+    coinmarketcap_api = CoinMarketCapAPI("228ec0fa-e903-4056-82c2-421e431712ac")
 
-    # Example: Miner tries to mine a block
-    miner_wallet = "MinerWalletAddressHere"
-    blockchain.mine_block(miner_wallet)
+    # CoinMarketCap API fetch (example usage)
+    coin_data = coinmarketcap_api.get_coin_data()
+    print(f"CoinMarketCap Data: {coin_data}")
+    
+    # Start mining process
+    miner.mine_block("Block data for CryptoX Coin")
+    
+    # Adjust mining difficulty if needed
+    difficulty_adjuster.adjust_difficulty(blockchain)
+    
+    # Example transaction
+    transaction = Transaction("CXPreMinerAddress123456789", "CXUserAddress987654321", 10)
+    fee = transaction.calculate_fee()
+    print(f"Transaction fee: {fee} CX")
 
-    # Example: Create a transaction
-    blockchain.create_transaction("User1", "User2", 50)
-
-    # Print the blockchain
-    blockchain.print_chain()
